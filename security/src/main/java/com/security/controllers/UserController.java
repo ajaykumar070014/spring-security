@@ -1,17 +1,18 @@
 package com.security.controllers;
 
 import com.security.Repository.UserRepository;
-import com.security.dto.RefreshTokenRequestDto;
+import com.security.dto.req.RefreshTokenRequestDto;
+import com.security.dto.req.RegisterReqDto;
+import com.security.dto.res.GenerateAccessTokenRes;
+import com.security.dto.res.LoginResDto;
+import com.security.dto.res.UserResDto;
 import com.security.models.User;
+import com.security.services.UserService;
 import com.security.util.JwtUtil;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Date;
 import java.util.List;
 
 @RestController
@@ -22,46 +23,28 @@ public class UserController {
     private UserRepository userRepository;
 
     @Autowired
+    private UserService userService;
+
+    @Autowired
     private PasswordEncoder passwordEncoder;
 
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Autowired
-    private AuthenticationManager authenticationManager;
-
-    @Value("${jwt.refresh.expiration}")
-    private long refreshValidityInMilliseconds;
 
     @PostMapping("/register")
-    public String register(@RequestBody User user) {
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
-        userRepository.save(user);
-        return "User registered successfully!";
+    public UserResDto register(@RequestBody RegisterReqDto user) {
+        return userService.registerUser(user);
     }
 
     @PostMapping("/login")
-    public String login(@RequestBody User user) {
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(user.getUsername(), user.getPassword()));
-        String accessToken = jwtUtil.generateToken(user.getUsername());
-        String refreshToken = jwtUtil.generateRefreshToken(user.getUsername());
-        User dbUser = userRepository.findByUsername(user.getUsername());
-        dbUser.setRefreshToken(refreshToken);
-        dbUser.setRefreshTokenExpiry(new Date(System.currentTimeMillis() + refreshValidityInMilliseconds));
-        userRepository.save(dbUser);
-
-        return "{ \"accessToken\": \"" + accessToken + "\", \"refreshToken\": \"" + refreshToken + "\" }";
+    public LoginResDto login(@RequestBody RegisterReqDto user) {
+        return userService.login(user);
     }
 
     @PostMapping("/refresh")
-    public String refresh(@RequestBody RefreshTokenRequestDto refreshToken) {
-        User user = userRepository.findByRefreshToken(refreshToken.getRefreshToken());
-        if (user == null || user.getRefreshTokenExpiry().before(new Date())) {
-            throw new RuntimeException("Invalid refresh token");
-        }
-
-        String newAccessToken = jwtUtil.generateToken(user.getUsername());
-        return "{ \"accessToken\": \"" + newAccessToken + "\" }";
+    public GenerateAccessTokenRes refresh(@RequestBody RefreshTokenRequestDto refreshToken) {
+        return userService.generateAccessToken(refreshToken);
     }
 
     @GetMapping("/user")
